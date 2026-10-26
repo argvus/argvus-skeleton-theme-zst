@@ -22,17 +22,6 @@ cd "$ROOT_DIR"
 shellcheck tools/sh/*.sh packaging/arch/common/*.sh
 bash -n tools/sh/*.sh packaging/arch/common/*.sh
 
-# Payload scripts are optional: theme packages may ship none.
-payload_scripts=()
-while IFS= read -r -d '' script; do
-	payload_scripts+=("$script")
-done < <(find src -type f -name '*.sh' -print0 | sort -z)
-
-if (( ${#payload_scripts[@]} > 0 )); then
-	shellcheck "${payload_scripts[@]}"
-	bash -n "${payload_scripts[@]}"
-fi
-
 metadata() {
 	bash -c '
 		source "$1"
@@ -42,25 +31,12 @@ metadata() {
 	' bash "$1"
 }
 
-ci_metadata="$(metadata packaging/arch/ci/PKGBUILD)"
+remote_metadata="$(metadata packaging/arch/remote/PKGBUILD)"
 local_metadata="$(metadata packaging/arch/local/PKGBUILD)"
-[[ "$ci_metadata" == "$local_metadata" ]] || die \
-	"CI and local PKGBUILD metadata is out of sync"
+[[ "$remote_metadata" == "$local_metadata" ]] || die \
+	"remote and local PKGBUILD metadata is out of sync"
 
-# argvus is the master package: every component, theme included, depends on it.
-# Line 7 of the metadata is the depends array.
-depends_line="$(printf '%s\n' "$ci_metadata" | sed -n 7p)"
-case " $depends_line " in
-	*" argvus "*) ;;
-	*) die "packaging/arch/ci/PKGBUILD must depend on argvus (the master package)" ;;
-esac
-
-# Removed components must not ship configuration. snappy-switcher was removed.
-if find src -iname '*snappy*' -print -quit | grep -q .; then
-	die "src/ ships snappy-switcher files, a removed component"
-fi
-
-for pkgbuild_dir in packaging/arch/ci packaging/arch/local; do
+for pkgbuild_dir in packaging/arch/remote packaging/arch/local; do
 	pkgbuild="$pkgbuild_dir/PKGBUILD"
 	[[ -f "$pkgbuild" ]] || die "missing $pkgbuild"
 	(
@@ -69,31 +45,48 @@ for pkgbuild_dir in packaging/arch/ci packaging/arch/local; do
 	)
 done
 
-# A theme manifest names resources that the package must ship. Missing ones are
-# silently skipped at runtime (no wallpaper, no calendar stylesheet), so catch
-# them here instead.
-for manifest in src/usr/share/argvus/appearance/themes.d/*/theme.toml; do
-	[[ -f "$manifest" ]] || die "no theme manifest under src/usr/share/argvus/appearance/themes.d/"
-	theme_dir="$(basename -- "$(dirname -- "$manifest")")"
-	manifest_id="$(sed -n 's/^id = "\(.*\)"$/\1/p' "$manifest" | head -n 1)"
-	[[ "$manifest_id" == "$theme_dir" ]] || die "$manifest: id '$manifest_id' does not match its directory"
-
-	wallpaper="$(sed -n 's/^wallpaper = "\([^"]*\)".*/\1/p' "$manifest" | head -n 1)"
-	# The template ships no wallpaper; new_theme.sh renames the theme and the
-	# wallpaper must then exist, so only the generated theme is checked here.
-	if [[ "$manifest_id" == skeleton ]]; then
-		printf 'note: %s is the template; the wallpaper is checked after new_theme.sh\n' "$manifest"
-	elif [[ -n "$wallpaper" ]]; then
-		[[ -f "src/usr/share/backgrounds/argvus/$wallpaper" ]] || die \
-			"$manifest: wallpaper '$wallpaper' is not in src/usr/share/backgrounds/argvus/ (ship it or fix the path)"
-	fi
-
-	calendar_css="$(sed -n 's/^calendar_css = "\([^"]*\)".*/\1/p' "$manifest" | head -n 1)"
-	if [[ -n "$calendar_css" ]]; then
-		[[ -f "src/etc/argvus/taskbar/calendar/themes/$calendar_css.css" ]] || die \
-			"$manifest: calendar stylesheet '$calendar_css.css' is not under src/etc/argvus/taskbar/calendar/themes/"
-	fi
-done
-
+# The theme manifest: schema 2, an id equal to its directory, the palette
+# entries every theme needs, its overrides and its wallpaper. `make check`
+# renders it against the installed templates; this check needs nothing
+# installed.
+python3 -I -c '
+import pathlib, sys, tomllib
+failed = False
+manifests = sorted(pathlib.Path(sys.argv[1]).glob("*/theme.toml"))
+if not manifests:
+  print("no theme manifest under " + sys.argv[1], file=sys.stderr)
+  sys.exit(1)
+for manifest in manifests:
+  try:
+    data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+  except (OSError, tomllib.TOMLDecodeError) as error:
+    print(f"invalid theme.toml: {manifest}: {error}", file=sys.stderr)
+    failed = True
+    continue
+  problems = []
+  if data.get("schema") != 2:
+    problems.append("schema must be 2")
+  if data.get("id") != manifest.parent.name:
+    problems.append("id must match the directory name")
+  if data.get("category") not in ("dark", "light"):
+    problems.append("category must be dark or light")
+  palette = data.get("palette", {})
+  problems += [f"palette.{name} is required" for name in ("bg", "fg", "accent") if name not in palette]
+  for name, target in data.get("overrides", {}).items():
+    if not (manifest.parent / target).is_file():
+      problems.append(f"overrides.{name}: {target} is missing")
+  # The wallpaper ships with the package: under /usr/share/backgrounds/argvus
+  # (src/usr/share/backgrounds/argvus here), or beside the manifest.
+  wallpaper = data.get("wallpaper", "")
+  if wallpaper.startswith("/"):
+    if not pathlib.Path("src" + wallpaper).is_file():
+      problems.append(f"wallpaper {wallpaper} is not shipped under src/")
+  elif wallpaper and not (manifest.parent / wallpaper).is_file():
+    problems.append(f"wallpaper {wallpaper} is missing beside the manifest")
+  for problem in problems:
+    print(f"{manifest}: {problem}", file=sys.stderr)
+  failed = failed or bool(problems)
+sys.exit(1 if failed else 0)
+' src/usr/share/argvus/themes || die "invalid theme manifest"
 git diff --check
 printf 'Validation OK\n'

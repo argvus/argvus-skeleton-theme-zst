@@ -27,3 +27,20 @@ arch_normalize_source_tree() {
 		mv -- "${roots[0]}" "$expected"
 	fi
 }
+
+arch_check_payload() {
+	local source_root="${srcdir}/${pkgname}-${pkgver}"
+
+	test -n "$(find "${source_root}/src" -type f -print -quit)"
+	local script
+	while IFS= read -r -d '' script; do bash -n "$script"; done < <(find "${source_root}/src" -type f -name '*.sh' -print0)
+}
+
+arch_package_payload() {
+	local source_root="${srcdir}/${pkgname}-${pkgver}"
+
+	cp -a "${source_root}/src/." "${pkgdir}/"
+	find "${pkgdir}" -type f -name '*.sh' -exec chmod 755 {} +
+	install -Dm644 "${source_root}/LICENSE" \
+		"${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

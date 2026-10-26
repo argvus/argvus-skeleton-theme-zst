@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
-# Turns this skeleton template into a new ARGVUS theme package.
+# Turns this skeleton into the repository of a new ARGVUS theme.
 #
-# Usage: tools/sh/new_theme.sh <slug> "<Display Name>"
-#   e.g. tools/sh/new_theme.sh nord-light "Nord Light"
+# Usage: tools/sh/new_theme.sh <id> "<Name>" <dark|light> [WALLPAPER]
+#   e.g. tools/sh/new_theme.sh ocean-night "Ocean Night" dark ~/Pictures/ocean.jxl
 #
-# Replaces the template identifiers (skeleton-theme, Skeleton and skeleton)
-# in every text file, renames theme files under src/ and resets the release
-# version and changelog. The script refuses to run once no template
-# identifier is left, so it cannot be applied twice.
+# - <id> becomes the theme ID and the package name (argvus-theme-<id>);
+# - <Name> is the name shown in the theme menu and the Control Center;
+# - dark or light is the category, and sets a starting palette of that kind;
+# - WALLPAPER (optional) is an image (.jxl, .png, .jpg or .webp) copied into the
+#   package; without it the placeholder wallpaper stays until you replace it.
+#
+# The script renames every "skeleton" identifier, writes the README of the new
+# theme, resets the version, and then removes itself: run it once.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
-SELF_NAME="${BASH_SOURCE[0]##*/}"
+SELF="$SCRIPT_DIR/${BASH_SOURCE[0]##*/}"
+THEMES="src/usr/share/argvus/themes"
+WALLPAPERS="src/usr/share/backgrounds/argvus/abstract"
 
 die() {
 	printf 'error: %s\n' "$1" >&2
@@ -20,7 +26,7 @@ die() {
 }
 
 usage() {
-	printf 'usage: %s <slug> "<Display Name>"\n' "$SELF_NAME" >&2
+	printf 'usage: %s <id> "<Name>" <dark|light> [WALLPAPER]\n' "${BASH_SOURCE[0]##*/}" >&2
 	exit 2
 }
 
@@ -29,89 +35,136 @@ sed_escape() {
 	printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
 }
 
-# Applies sed expressions to a file without changing its mode or inode.
+# Applies sed expressions to a file in place, keeping its mode.
 rewrite_file() {
 	local file="$1"
-	local tmp
 	shift
-
-	tmp="$(mktemp)"
-	sed "$@" "$file" >"$tmp"
-	cat -- "$tmp" >"$file"
-	rm -f -- "$tmp"
+	sed -i "$@" "$file"
 }
 
-# The shared-file sync script and its .skeleton/ state keep the word on purpose.
-has_template_names() {
-	[[ -n "$(find "$ROOT_DIR" \( -name .git -o -name build -o -name .skeleton \) -prune \
-		-o -iname '*skeleton*' ! -name sync-skeleton.sh -print -quit)" ]]
-}
+[[ $# -eq 3 || $# -eq 4 ]] || usage
+id="$1"
+name="$2"
+category="$3"
+wallpaper_source="${4:-}"
 
-has_template_content() {
-	grep -rIqE --exclude-dir=.git --exclude-dir=build --exclude-dir=.skeleton \
-		--exclude=sync-skeleton.sh --exclude="$SELF_NAME" \
-		'skeleton|<ORG>|<REPO>|<PKGNAME>' "$ROOT_DIR"
-}
-
-[[ $# -eq 2 ]] || usage
-
-slug="$1"
-display="$2"
-
-[[ "$slug" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || \
-	die "invalid slug '$slug': use lowercase letters, digits and single hyphens"
-[[ -n "$display" && "$display" != *$'\n'* ]] || \
-	die "display name must be a non-empty single line"
-
-cd "$ROOT_DIR"
-
-if ! has_template_names && ! has_template_content; then
-	die "repository is already initialized: no 'skeleton' identifiers remain"
+[[ "$id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || \
+	die "invalid ID '$id': use lowercase letters, digits and single hyphens"
+[[ "$id" != *-float ]] || die "the ID must not end in -float: Float is a layout of every theme"
+[[ "$id" != skeleton ]] || die "choose the ID of your theme, not 'skeleton'"
+[[ -n "$name" && "$name" != *$'\n'* && "$name" != *'"'* ]] || \
+	die "the name must be a non-empty single line without double quotes"
+[[ "$category" == dark || "$category" == light ]] || die "the category must be dark or light"
+if [[ -n "$wallpaper_source" ]]; then
+	[[ -f "$wallpaper_source" ]] || die "wallpaper not found: $wallpaper_source"
+	extension="${wallpaper_source##*.}"
+	extension="${extension,,}"
+	case "$extension" in
+	jxl | png | jpg | jpeg | webp) ;;
+	*) die "unsupported wallpaper format '.$extension': use .jxl, .png, .jpg or .webp" ;;
+	esac
 fi
 
-slug_sed="$(sed_escape "$slug")"
-display_sed="$(sed_escape "$display")"
+cd "$ROOT_DIR"
+[[ -d "$THEMES/skeleton" ]] || die "this repository is already a theme: no $THEMES/skeleton left"
 
-# Rename theme files first (children before parents), so their paths stay valid.
-while IFS= read -r -d '' path; do
-	dir="$(dirname -- "$path")"
-	base="$(basename -- "$path")"
-	mv -- "$path" "$dir/${base//skeleton/$slug}"
-done < <(find src -depth -iname '*skeleton*' -print0)
+# The wallpaper: the given image, or the placeholder under its new name.
+placeholder="$WALLPAPERS/dark/skeleton-abstract-dark.jxl"
+mkdir -p "$WALLPAPERS/$category"
+if [[ -n "$wallpaper_source" ]]; then
+	wallpaper_file="$WALLPAPERS/$category/$id-abstract-$category.$extension"
+	cp -- "$wallpaper_source" "$wallpaper_file"
+	rm -f -- "$placeholder"
+else
+	wallpaper_file="$WALLPAPERS/$category/$id-abstract-$category.jxl"
+	mv -- "$placeholder" "$wallpaper_file"
+fi
+rmdir --ignore-fail-on-non-empty "$WALLPAPERS/dark" 2>/dev/null || true
+mv -- "$THEMES/skeleton" "$THEMES/$id"
+manifest="$THEMES/$id/theme.toml"
 
-# Replace identifiers in every text file that mentions the template.
+# A light theme starts from a light palette.
+if [[ "$category" == light ]]; then
+	rewrite_file "$manifest" \
+		-e 's|^bg = ".*"|bg = "#F5F6F8"|' \
+		-e 's|^fg = ".*"|fg = "#24292F"|' \
+		-e 's|^accent = ".*"|accent = "#2F6FB0"|' \
+		-e 's|^color0 = ".*"|color0 = "#24292F"|' \
+		-e 's|^color7 = ".*"|color7 = "#D0D7DE"|' \
+		-e 's|^color8 = ".*"|color8 = "#57606A"|' \
+		-e 's|^color15 = ".*"|color15 = "#F5F6F8"|'
+fi
+rewrite_file "$manifest" \
+	-e "s|^category = \".*\"|category = \"$category\"|" \
+	-e "s|^wallpaper = \".*\"|wallpaper = \"/${wallpaper_file#src/}\"|"
+
+# The skeleton-only Makefile target goes away with this script.
+rewrite_file Makefile -e '/^# >>> skeleton/,/^# <<< skeleton/d'
+
+# Every "skeleton" identifier, in every text file of the repository.
+id_sed="$(sed_escape "$id")"
+name_sed="$(sed_escape "$name")"
 while IFS= read -r -d '' file; do
-	[[ "${file#./}" == "$SELF_NAME" ]] && continue
-	[[ "${file#./}" == "tools/sh/$SELF_NAME" ]] && continue
-	[[ "${file#./}" == "tools/sh/sync-skeleton.sh" ]] && continue
-	[[ "${file#./}" == .skeleton/* ]] && continue
-	grep -IqE 'skeleton|<ORG>|<REPO>|<PKGNAME>' -- "$file" || continue
+	[[ "$file" == "./tools/sh/new_theme.sh" ]] && continue
+	grep -Iq -e skeleton -e Skeleton -- "$file" || continue
 	rewrite_file "$file" \
-		-e "s|skeleton-theme|${slug_sed}-theme|g" \
-		-e "s|Skeleton|${display_sed}|g" \
-		-e "s|skeleton|${slug_sed}|g" \
-		-e "s|<ORG>/<REPO>|argvus/${slug_sed}-theme|g" \
-		-e "s|<PKGNAME>|argvus-theme-${slug_sed}|g"
+		-e "s|argvus-theme-skeleton|argvus-theme-${id_sed}|g" \
+		-e "s|Skeleton|${name_sed}|g" \
+		-e "s|skeleton|${id_sed}|g"
 done < <(find . \( -name .git -o -name build \) -prune -o -type f -print0)
 
-for pkgbuild in packaging/arch/ci/PKGBUILD packaging/arch/local/PKGBUILD; do
-	rewrite_file "$pkgbuild" -e 's/^pkgver=.*/pkgver=0.1.0/'
+# The repository of the theme in the issue templates.
+rewrite_file .github/ISSUE_TEMPLATE/config.yml \
+	-e '/^# Replace <ORG>\/<REPO>/d' \
+	-e "s|<ORG>/<REPO>|argvus/argvus-theme-${id_sed}|g"
+
+for pkgbuild in packaging/arch/local/PKGBUILD packaging/arch/remote/PKGBUILD; do
+	rewrite_file "$pkgbuild" -e 's/^pkgver=.*/pkgver=0.1.0/' -e 's/^pkgrel=.*/pkgrel=1/'
 done
 
-cat >CHANGELOG.md <<'EOF'
-# Changelog
+cat >README.md <<EOF
+# ${name} theme for ARGVUS
 
-All notable changes to this project are documented in this file. The format is
-based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
-project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+ARGVUS ${category^} theme, \`${id}\`, with its Sticky and Float layouts.
 
-This file is generated from Conventional Commits with git-cliff (`make changelog`).
-<!-- generated by git-cliff -->
+## Theme identity
+
+| Field | Value |
+| --- | --- |
+| Theme ID | \`${id}\` |
+| Display name | ${name} |
+| Mode | \`${category}\` |
+| Package | \`argvus-theme-${id}\` |
+| Wallpaper | \`/${wallpaper_file#src/}\` |
+
+The theme is \`src/usr/share/argvus/themes/${id}/theme.toml\`: its name,
+category, wallpaper and palette. Every component of the desktop renders its
+files from that palette when the theme is applied, so the manifest and the
+wallpaper are the whole package.
+
+## Working on the theme
+
+\`\`\`sh
+make check     # render every component in both layouts and report errors
+make try       # install it as your own theme, then: argvus theme apply ${id}
+make untry     # remove that copy
+make validate  # repository and packaging checks
+make build     # build the package into build/dist/
+make install   # install the package (sudo pacman -U)
+\`\`\`
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the build and release details.
+
+## License
+
+GPL-3.0-only. See [LICENSE](LICENSE).
 EOF
 
-printf 'Theme "%s" (%s) created from the skeleton template.\n' "$display" "$slug"
+rm -f -- "$SELF"
+
+printf 'Theme "%s" (%s, %s) created.\n\n' "$name" "$id" "$category"
 printf 'Next steps:\n'
-printf '  1. Ship the wallpaper named in themes.d/%s/theme.toml under\n' "$slug"
-printf '     src/usr/share/backgrounds/argvus/ (validation fails until it exists).\n'
-printf '  2. Fill the TODO(palette) placeholders in src/ and the qt6ct colors.\n'
-printf '  3. make validate && make build\n'
+printf '  1. Edit the palette in %s\n' "$manifest"
+[[ -n "$wallpaper_source" ]] || printf '  2. Replace the placeholder wallpaper %s\n' "$wallpaper_file"
+printf '  3. make try, then: argvus theme apply %s\n' "$id"
+printf '  4. make validate && make build\n'

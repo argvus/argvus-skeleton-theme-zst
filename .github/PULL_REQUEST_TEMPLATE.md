@@ -14,7 +14,7 @@
 ## Author Checklist
 
 - [ ] `shellcheck tools/sh/pkgbuild_local.sh` passes
-- [ ] `cd packaging/arch/ci && makepkg -p PKGBUILD --printsrcinfo >/dev/null` passes
+- [ ] `cd packaging/arch/remote && makepkg -p PKGBUILD --printsrcinfo >/dev/null` passes
 - [ ] `make build` produces the expected `.pkg.tar.zst` in `build/dist/`
 - [ ] `sha256sums` does **not** use `SKIP` (only `sha256sums=()` committed)
 - [ ] No `build/` artifacts or generated temporary PKGBUILDs are committed
@@ -26,7 +26,7 @@
 
 - [ ] `make build`
 - [ ] `make install`
-- [ ] Installed payload verified: `pacman -Ql <pkgname>` and the theme files under `/etc` and `/usr/share/argvus`
+- [ ] Installed payload verified: `pacman -Ql <pkgname>`
 
 ## Notes
 

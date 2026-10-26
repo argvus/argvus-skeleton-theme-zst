@@ -1,13 +1,16 @@
-.PHONY: help build package install install-package clean validate lint spellcheck changelog
+.PHONY: help new check try untry build package install install-package clean validate lint spellcheck
 
 .DEFAULT_GOAL := help
 
-# Shell scripts shipped in the payload (src/). Empty for theme packages that
-# install no scripts, in which case the payload checks are skipped.
-payload_scripts := $(shell find src -type f -name '*.sh' 2>/dev/null | sort)
-
 help:
 	@echo "Available targets:"
+# >>> skeleton: removed by tools/sh/new_theme.sh
+	@echo "  make new ID=<id> NAME=\"<Name>\" CATEGORY=<dark|light> [WALLPAPER=<file>]"
+	@echo "                       - turn this skeleton into a new theme (run once)"
+# <<< skeleton
+	@echo "  make check           - render every component of the theme in both layouts"
+	@echo "  make try             - install the theme as your own theme to try it"
+	@echo "  make untry           - remove that copy"
 	@echo "  make build           - build the package into build/"
 	@echo "  make package         - alias for make build"
 	@echo "  make install         - install the single local package (sudo pacman -U)"
@@ -15,7 +18,21 @@ help:
 	@echo "  make validate        - run required repository and PKGBUILD checks"
 	@echo "  make lint            - run local static checks"
 	@echo "  make spellcheck      - run cspell (if installed)"
-	@echo "  make changelog       - regenerate CHANGELOG.md with git-cliff"
+
+# >>> skeleton: removed by tools/sh/new_theme.sh
+new:
+	@tools/sh/new_theme.sh "$(ID)" "$(NAME)" "$(CATEGORY)" $(if $(WALLPAPER),"$(WALLPAPER)")
+# <<< skeleton
+
+check:
+	@command -v argvus >/dev/null 2>&1 || { echo "argvus is not installed: run make check on an ARGVUS desktop." >&2; exit 1; }
+	@argvus theme check src/usr/share/argvus/themes/*/
+
+try:
+	@tools/sh/theme_try.sh install
+
+untry:
+	@tools/sh/theme_try.sh remove
 
 build:
 	@tools/sh/pkgbuild_local.sh
@@ -35,15 +52,11 @@ install:
 install-package: install
 
 validate:
-	@sh tools/sh/sync-skeleton.sh --check
 	@tools/sh/validate.sh
 
 lint:
 	@shellcheck tools/sh/*.sh packaging/arch/common/*.sh
 	@bash -n tools/sh/*.sh packaging/arch/common/*.sh
-	@if [ -n "$(payload_scripts)" ]; then \
-		shellcheck $(payload_scripts) && bash -n $(payload_scripts); \
-	fi
 	@git diff --check
 	@echo "Lint OK"
 
@@ -53,9 +66,6 @@ spellcheck:
 	else \
 		echo "cspell is not installed; skipping (CI runs it)." >&2; \
 	fi
-
-changelog:
-	@git-cliff -o CHANGELOG.md
 
 clean:
 	rm -rf -- build/
