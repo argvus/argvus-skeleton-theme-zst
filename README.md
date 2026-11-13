@@ -359,7 +359,7 @@ GPL-3.0-only. See [LICENSE](LICENSE).
 
 ## Install a community theme from Git
 
-Publish the skeleton-format repository, including its wallpaper, then install it:
+Publish the skeleton-format repository, including its wallpaper, then install it. The installer reads the theme from `src/` only; `packaging/` is optional and is used to build Arch Linux packages. No PKGBUILD is needed for Git installation:
 
 ```sh
 argvus theme install https://github.com/USER/argvus-theme-NAME.git

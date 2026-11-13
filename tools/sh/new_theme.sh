@@ -153,7 +153,7 @@ make build     # build the package into build/dist/
 make install   # install the package (sudo pacman -U)
 \`\`\`
 
-Publish this repository with its wallpaper. Users can install it with
+Git installation reads the theme files from `src/`; `packaging/` is optional and only used to build Arch Linux packages. Publish this repository with its wallpaper. Users can install it with
 \`argvus theme install https://HOST/USER/argvus-theme-${id}.git\`,
 apply it with \`argvus theme apply ${id}\`, and remove it with
 \`argvus theme uninstall ${id}\`. Installed themes appear in Custom themes.
