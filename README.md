@@ -61,7 +61,7 @@ Clone it into the directory of your theme. The convention for the directory
 and the repository is `argvus-theme-<id>`:
 
 ```sh
-git clone https://github.com/argvus/argvus-skeleton-theme.git argvus-theme-ocean-night
+git clone https://github.com/argvus/argvus-skeleton-theme-zst.git argvus-theme-ocean-night
 cd argvus-theme-ocean-night
 ```
 
