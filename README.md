@@ -89,10 +89,11 @@ Then run, once:
 make new ID=ocean-night NAME="Ocean Night" CATEGORY=dark
 ```
 
-You can give the wallpaper now (`.jxl`, `.png`, `.jpg` or `.webp`):
+For a new official theme, use an abstract wallpaper in JPEG XL. Convert a PNG
+with `cjxl image.png image.jxl`, then pass the result to the generator:
 
 ```sh
-make new ID=ocean-night NAME="Ocean Night" CATEGORY=dark WALLPAPER=~/Pictures/ocean.png
+make new ID=ocean-night NAME="Ocean Night" CATEGORY=dark WALLPAPER=~/Pictures/image.jxl
 ```
 
 `make new` (`tools/sh/new_theme.sh`):
@@ -101,7 +102,7 @@ make new ID=ocean-night NAME="Ocean Night" CATEGORY=dark WALLPAPER=~/Pictures/oc
   package name (`argvus-theme-ocean-night`) and its description;
 - sets the category, and starts a light theme from a light palette;
 - puts the wallpaper in place (or the placeholder under its new name);
-- resets the package version to `0.1.0` and writes the README of your theme;
+- resets the package version to `0.0.0` and writes the README of your theme;
 - removes itself, so it runs only once.
 
 From here on, the theme is `src/usr/share/argvus/themes/<id>/theme.toml`.
@@ -260,8 +261,8 @@ theme.
    the package:
 
    ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.0.0
+   git push origin v0.0.0
    ```
 
 The signing key, the secrets and the release steps are in

@@ -119,7 +119,7 @@ rewrite_file .github/ISSUE_TEMPLATE/config.yml \
 	-e "s|<ORG>/<REPO>|argvus/argvus-theme-${id_sed}|g"
 
 for pkgbuild in packaging/arch/local/PKGBUILD packaging/arch/remote/PKGBUILD; do
-	rewrite_file "$pkgbuild" -e 's/^pkgver=.*/pkgver=0.1.0/' -e 's/^pkgrel=.*/pkgrel=1/'
+	rewrite_file "$pkgbuild" -e 's/^pkgver=.*/pkgver=0.0.0/' -e 's/^pkgrel=.*/pkgrel=1/'
 done
 
 cat >README.md <<EOF
@@ -153,7 +153,7 @@ make build     # build the package into build/dist/
 make install   # install the package (sudo pacman -U)
 \`\`\`
 
-Git installation reads the theme files from `src/`; `packaging/` is optional and only used to build Arch Linux packages. Publish this repository with its wallpaper. Users can install it with
+Git installation reads the theme files from \`src/\`; \`packaging/\` is optional and only used to build Arch Linux packages. Publish this repository with its wallpaper. Users can install it with
 \`argvus theme install https://HOST/USER/argvus-theme-${id}.git\`,
 apply it with \`argvus theme apply ${id}\`, and remove it with
 \`argvus theme uninstall ${id}\`. Installed themes appear in Custom themes.

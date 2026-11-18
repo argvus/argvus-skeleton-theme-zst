@@ -153,8 +153,8 @@ not `GPG_KEY_ID`.
 3. Create and push the tag:
 
    ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.0.0
+   git push origin v0.0.0
    ```
 
    The release workflow can also be started manually by selecting an existing
